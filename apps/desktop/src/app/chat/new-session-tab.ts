@@ -1,3 +1,6 @@
+import type { NavigateFunction } from 'react-router'
+
+import { $workspaceIsPage, NEW_CHAT_ROUTE, sessionRoute } from '@/app/routes'
 import type { useSessionActions } from '@/app/session/hooks/use-session-actions'
 import { $workspaceMode, $workspaceNewSessionTarget, $workspaceOwnerKey } from '@/components/pane-shell/workspace-scope'
 
@@ -10,6 +13,26 @@ type OpenNewSessionTile = ReturnType<typeof useSessionActions>['openNewSessionTi
 // (the create fronts it when it lands) rather than each starting a twin. The
 // latch is per window, like the tab strip, and clears on success or failure.
 let pendingDraftCreate: null | Promise<void> = null
+
+/**
+ * Leave a workspace PAGE (Settings, Profiles, …) for the chat surface. The
+ * new tab fronts the workspace PANE, but a page route covers the pane, so a
+ * new chat minted from a page stays invisible behind it. The route keeps the
+ * primary chat intact when one is selected (its own session route), and only
+ * falls back to the new-chat route when the primary holds no session.
+ */
+export function leaveWorkspacePageForChat(
+  navigate: NavigateFunction,
+  resolveStoredId: () => null | string
+): void {
+  if (!$workspaceIsPage.get()) {
+    return
+  }
+
+  const storedId = resolveStoredId()
+
+  navigate(storedId ? sessionRoute(storedId) : NEW_CHAT_ROUTE)
+}
 
 /**
  * The tab-strip "+" and ⌘T: open a new session as its own tab (stacked into
@@ -26,7 +49,14 @@ let pendingDraftCreate: null | Promise<void> = null
  * carries plain session tabs alongside bot chats, so a "+" there must never
  * be dead just because the sidebar's current selection has nowhere to route.
  */
-export function openNewSessionTab(openNewSessionTile: OpenNewSessionTile): void {
+export function openNewSessionTab(
+  openNewSessionTile: OpenNewSessionTile,
+  options?: { leaveWorkspacePage?: () => void }
+): void {
+  // A minted tab is invisible behind a workspace page; the caller supplies
+  // the route-leave (it owns the router navigate + the primary selection).
+  options?.leaveWorkspacePage?.()
+
   const workspaceOwnerKey = $workspaceOwnerKey.get()
   const workspaceNewSessionTarget = $workspaceNewSessionTarget.get()
 
